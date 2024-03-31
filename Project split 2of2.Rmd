@@ -1,0 +1,181 @@
+---
+title: "Project 3 GG"
+output:
+  word_document: default
+  html_document: default
+date: "2024-02-19"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r echo = TRUE}
+df_new_edt <- Filter(is.numeric, df_new)
+# Preprocess the data: Convert bleaching percentage into a binary variable
+df_new_edt$Bleached <- ifelse(df_new_edt$Percent_Bleaching > 10, "Bleached", "Not Bleached")
+df_new_edt <- df_new_edt[,-which(names(df_new_edt) == "Percent_Bleaching")]
+table(df_new_edt$Bleached)
+# Split the data into training and testing sets
+n <- nrow(df_red1)
+n
+strata_sizes_lda <- round(table(df_new_edt$Bleached) * 0.75)
+strata_sizes_lda
+
+strata_sizes_lda=c(4196,7388)
+
+set.seed(2023)
+# Perform stratified sampling
+idx2_lda=sampling:::strata(df_new_edt, stratanames=c("Bleached"), size = strata_sizes_lda, method = "srswor")
+# Extract the row indices for the sample
+
+# Create training and testing datasets
+trainingData_lda <- df_new_edt[idx2_lda$ID_unit, ]
+testingData_lda <- df_new_edt[-idx2_lda$ID_unit, ]
+
+```
+
+
+
+```{r echo = TRUE}
+
+
+#df_new_edt$Bleaching_Level <- ifelse(df_new_edt$Percent_Bleaching <= 10, "Mild", "Severe")
+#df_new_edt <- df_new_edt[,-which(names(df_new_edt) == "Percent_Bleaching")]
+
+#table(df_new_edt$Bleaching_Level)
+
+#df_new_edt$Bleached_Multi <- ifelse(df_red1$Percent_Bleaching == 0, 0, ifelse(df_red1$Percent_Bleaching <= 10, 1, #ifelse(df_red1$Percent_Bleaching <= 50, 2, 3)))
+
+
+```
+
+```{r echo = TRUE}
+table(trainingData_lda$Bleached)
+```
+```{r echo = TRUE}
+
+library(ISLR)
+
+lda.fit <- lda(Bleached~.,data=trainingData_lda)
+lda.fit
+plot(lda.fit)
+cat("\n")
+contrasts(factor(trainingData_lda$Bleached))
+
+
+```
+```{r echo =TRUE}
+
+
+# Create a data frame with coefficients
+coefficients <- tibble(
+  Feature = c("Distance_to_Shore", "Turbidity", "Cyclone_Frequency", "Depth_m", "Temperature_Kelvin", 
+              "Temperature_Mean", "Temperature_Minimum", "Temperature_Maximum", "Windspeed", "SSTA", 
+              "SSTA_Maximum", "SSTA_Frequency"),
+  LD1 = c(-0.0000155187, 6.9725934989, -0.0028528698, -0.1096116876, -0.4381709541, 0.9931989216,
+          -0.2109623726, -0.4423577859, -0.0731603937, 0.2051769574, 0.2800036866, -0.0846146774)
+)
+
+# # Create a nice table with blue colors
+# datatable(coefficients, caption = "Coefficients of Linear Discriminants (LD1)", 
+#           options = list(paging = TRUE, searching = FALSE))
+
+
+
+```
+
+```{r echo =TRUE}
+library(klaR)
+partimat(factor(Bleached) ~ (Depth_m + Temperature_Kelvin + Temperature_Minimum + Temperature_Maximum + Windspeed), data = trainingData_lda, method="lda")
+
+```
+```{r echo = TRUE}
+
+lda.pred=predict(lda.fit, testingData_lda )
+
+table(lda.pred$class ,testingData_lda$Bleached)
+
+misclassification_rate=mean(lda.pred$class!= testingData_lda $Bleached)
+cat("\n")
+cat("The misclassification rate is given as :")
+cat("\n")
+
+misclassification_rate
+
+
+```
+
+```{r echo = TRUE}
+
+qda.fit<-qda(Bleached~.,data=trainingData_lda)
+
+qda.fit
+
+qda.pred=predict(qda.fit, testingData_lda)
+
+table(qda.pred$class ,testingData_lda$Bleached)
+
+misclassification_rate=mean(qda.pred$class!= testingData_lda$Bleached)
+cat("\n")
+cat("The misclassification rate is given as :")
+cat("\n")
+
+misclassification_rate
+
+library(ggplot2)
+
+# Create the confusion matrix
+conf_matrix <- matrix(c(493, 13986, 876,4068), nrow = 2, byrow = TRUE,
+                      dimnames = list(Actual = c("Not Bleached", "Bleached"),
+                                      Predicted = c("Bleached", "Not Bleached")))
+
+# Convert the matrix to a data frame
+conf_df <- as.data.frame(as.table(conf_matrix))
+names(conf_df) <- c("Actual", "Predicted", "Count")
+
+# Plot the confusion matrix heatmap using ggplot2 with switched axes
+ggplot(conf_df, aes(x = Predicted, y = Actual, fill = Count)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = Count), size = 10, color = "black") +  # Add numbers inside cells
+  scale_fill_gradient(low = "white", high = "blue") +
+  labs(title = "Confusion Matrix",
+       x = "Predicted",
+       y = "Actual") +  # Switched axis labels
+  theme_minimal()
+
+
+
+```
+
+
+Shapiro-Wilk test.
+H0 : the sample data are significantly normally distributed
+Ha : the sample data are not significantly normally distributed
+
+```{r echo = TRUE}
+
+train_assump <- Filter(is.numeric, testingData_lda)
+# 
+# # Loop through each column in the dataframe and conduct Shapiro-Wilk test
+# for (col in names(train_assump)) {
+#   shapiro_test_result <- shapiro.test(train_assump[[col]])
+#   cat("Shapiro-Wilk Test for column", col, ":\n")
+#   print(shapiro_test_result)}
+
+
+```
+
+
+```{r echo = TRUE}
+
+library(energy)
+library(heplots)
+
+mvnorm.etest(train_assump, R=100)
+
+
+boxm <- heplots::boxM(train_assump, factor(testingData_lda$Bleached))
+boxm
+
+```
